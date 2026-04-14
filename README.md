@@ -2,6 +2,40 @@
 
 Python bot that sends a daily Telegram briefing for Salvador, BA with weather, sea conditions, wind and tide data.
 
+## What It Sends
+
+Every day at `06:00` in Salvador, the bot sends a message like this:
+
+```text
+Bom dia! Boletim de Salvador - 14/04/2026
+
+CLIMA
+- Condicao: Chuva
+- Temperatura: 24C a 29C
+- UV: 0.0
+- Amanha: Chuva, 24C a 29C
+
+MAR E VENTO
+- Resumo: ondas de 1,5 m a 1,6 m; vento entre 12,1 nos (22,3 km/h) e 13,2 nos (24,5 km/h)
+- Manha: 09:00, Fraco, ondas 1,6 m de ESE, vento SSE 12,2 nos (22,7 km/h)
+- Tarde: 15:00, Fraco, ondas 1,5 m de ESE, vento SE 12,1 nos (22,3 km/h)
+- Noite: 18:00, Fraco, ondas 1,5 m de ESE, vento SE 13,2 nos (24,5 km/h)
+
+MARE
+- Proxima alta: 13:53 (2,27 m)
+- Alta: 01:32 (2,06 m)
+- Baixa: 07:32 (0,41 m)
+- Alta: 13:53 (2,27 m)
+- Baixa: 20:00 (0,35 m)
+- Sol: 05:39 / 17:28
+- Datum: Mean Lower Low Water
+
+FONTES
+- CPTEC/INPE (atualizacao do clima: 2026-04-14)
+- CPTEC/INPE (ondas: 14-04-2026)
+- Tide-Forecast.com
+```
+
 ## Features
 
 - Fetches daily weather forecast for Salvador from CPTEC/INPE
@@ -15,6 +49,54 @@ Python bot that sends a daily Telegram briefing for Salvador, BA with weather, s
 - Python 3.11+
 - A Telegram bot token
 - A Telegram chat ID
+
+## Fork And Setup
+
+If you want to use this bot in your own GitHub account:
+
+1. Fork this repository.
+2. In your fork, open `Settings` > `Secrets and variables` > `Actions`.
+3. Create your Telegram bot and get the credentials.
+4. Add the required repository secrets.
+5. Run the workflow manually once to validate everything.
+
+## Create The Telegram Bot
+
+1. Open Telegram and start a chat with [@BotFather](https://t.me/BotFather).
+2. Send `/newbot`.
+3. Choose a display name for your bot.
+4. Choose a unique username ending with `bot`.
+5. Copy the token returned by BotFather.
+
+This token is the value you must save as `TELEGRAM_TOKEN` in your repository secrets.
+
+## Get Your Telegram Chat ID
+
+You need the chat ID where the bot will post the daily message.
+
+1. Start a conversation with your bot, or add it to a group/channel where you want the messages.
+2. Send any message to the bot or group.
+3. Open this URL in the browser, replacing `<TOKEN>` with your bot token:
+
+```text
+https://api.telegram.org/bot<TOKEN>/getUpdates
+```
+
+4. Look for `chat` and copy the `id` value.
+
+Examples:
+
+- Private chat IDs are usually positive numbers
+- Group chat IDs are usually negative numbers
+
+Save that value as `TELEGRAM_CHAT_ID` in your repository secrets.
+
+## Configure GitHub Secrets
+
+Add these secrets in your forked repository under `Settings` > `Secrets and variables` > `Actions`:
+
+- `TELEGRAM_TOKEN`: token created with BotFather
+- `TELEGRAM_CHAT_ID`: chat ID that will receive the daily message
 
 ## Installation
 
@@ -55,6 +137,13 @@ Required repository secrets:
 
 - `TELEGRAM_TOKEN`
 - `TELEGRAM_CHAT_ID`
+
+To validate your fork after adding the secrets:
+
+1. Open the `Actions` tab in GitHub.
+2. Select the `run main.py` workflow.
+3. Click `Run workflow`.
+4. Confirm that the run finishes successfully and that the Telegram message is delivered.
 
 If the workflow fails, the generated files under `logs/` are uploaded as artifacts.
 
