@@ -1,0 +1,46 @@
+name: run main.py
+
+on:
+  schedule:
+    - cron: '0 9 * * *' # Daily at 09:00 UTC / 06:00 in Salvador
+  workflow_dispatch:
+
+concurrency:
+  group: salvador-tide-bot
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: checkout repo content
+        uses: actions/checkout@v6
+
+      - name: setup python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: install python packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: execute py script
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py
+
+      - name: upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: logs-${{ github.run_id }}
+          path: logs/
+          if-no-files-found: ignore
