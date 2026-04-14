@@ -160,9 +160,13 @@ def clean_text(value):
     return re.sub(r"\s+", " ", (value or "")).strip()
 
 
-def format_number(value):
-    formatted = f"{value:.1f}".rstrip("0").rstrip(".")
+def format_number(value, decimals=1):
+    formatted = f"{value:.{decimals}f}".rstrip("0").rstrip(".")
     return formatted.replace(".", ",")
+
+
+def format_meters(value, decimals=1):
+    return f"{format_number(value, decimals=decimals)} m"
 
 
 def format_date_br(value):
@@ -171,6 +175,20 @@ def format_date_br(value):
 
 def format_time_br(value):
     return value.strftime("%H:%M")
+
+
+def convert_mps_to_knots(value):
+    return value * 1.943844
+
+
+def convert_mps_to_kmh(value):
+    return value * 3.6
+
+
+def format_wind_speed(value_mps):
+    knots = format_number(convert_mps_to_knots(value_mps))
+    kmh = format_number(convert_mps_to_kmh(value_mps))
+    return f"{knots} nos ({kmh} km/h)"
 
 
 def parse_cptec_daily_date(raw_value):
@@ -349,6 +367,7 @@ def parse_tide_events(table_selector, reference_date):
             continue
 
         clock_time = parse_clock(raw_time)
+        height_m = float(clean_text(raw_height).replace(" m", ""))
         events.append(
             {
                 "kind": tide_kind,
@@ -357,7 +376,7 @@ def parse_tide_events(table_selector, reference_date):
                 "datetime": datetime.combine(
                     reference_date, clock_time, SALVADOR_TIMEZONE
                 ),
-                "height": raw_height,
+                "height_m": height_m,
             }
         )
 
@@ -415,7 +434,7 @@ def fetch_tides(session):
 def build_weather_lines(weather_payload):
     today_forecast = weather_payload["today"]
     lines = [
-        "Clima",
+        "CLIMA",
         f"- Condicao: {today_forecast['description']}",
         f"- Temperatura: {today_forecast['minimum']}C a {today_forecast['maximum']}C",
         f"- UV: {today_forecast['uv_index']}",
@@ -436,10 +455,10 @@ def build_wave_lines(wave_payload):
     heights = [period["height"] for period in wave_payload["periods"]]
     wind_speeds = [period["wind_speed"] for period in wave_payload["periods"]]
     lines = [
-        "Mar e vento",
+        "MAR E VENTO",
         "- Resumo: ondas de "
-        f"{format_number(min(heights))} a {format_number(max(heights))} m; "
-        f"vento CPTEC entre {format_number(min(wind_speeds))} e {format_number(max(wind_speeds))}",
+        f"{format_meters(min(heights))} a {format_meters(max(heights))}; "
+        f"vento entre {format_wind_speed(min(wind_speeds))} e {format_wind_speed(max(wind_speeds))}",
     ]
 
     for period in wave_payload["periods"]:
@@ -447,25 +466,25 @@ def build_wave_lines(wave_payload):
             f"- {period['label']}: "
             f"{format_time_br(period['forecast_at'])}, "
             f"{period['agitation']}, "
-            f"ondas {format_number(period['height'])} m {period['direction']}, "
-            f"vento {period['wind_direction']} {format_number(period['wind_speed'])}"
+            f"ondas {format_meters(period['height'])} de {period['direction']}, "
+            f"vento {period['wind_direction']} {format_wind_speed(period['wind_speed'])}"
         )
 
     return lines
 
 
 def build_tide_lines(tide_payload):
-    lines = ["Mare"]
+    lines = ["MARE"]
     if tide_payload["upcoming_event"]:
         next_event = tide_payload["upcoming_event"]
         lines.append(
             f"- Proxima {next_event['label'].lower()}: "
-            f"{format_time_br(next_event['datetime'])} ({next_event['height']})"
+            f"{format_time_br(next_event['datetime'])} ({format_meters(next_event['height_m'], decimals=2)})"
         )
 
     for event in tide_payload["events"]:
         lines.append(
-            f"- {event['label']}: {format_time_br(event['datetime'])} ({event['height']})"
+            f"- {event['label']}: {format_time_br(event['datetime'])} ({format_meters(event['height_m'], decimals=2)})"
         )
 
     if tide_payload["sunrise"] and tide_payload["sunset"]:
@@ -483,7 +502,7 @@ def build_tide_lines(tide_payload):
 def build_telegram_message(weather_payload, wave_payload, tide_payload):
     today = datetime.now(SALVADOR_TIMEZONE).date()
     lines = [
-        f"Bom dia! Boletim de Salvador ({format_date_br(today)})",
+        f"Bom dia! Boletim de Salvador - {format_date_br(today)}",
         "",
         *build_weather_lines(weather_payload),
         "",
@@ -491,7 +510,7 @@ def build_telegram_message(weather_payload, wave_payload, tide_payload):
         "",
         *build_tide_lines(tide_payload),
         "",
-        "Fontes",
+        "FONTES",
         f"- CPTEC/INPE (atualizacao do clima: {weather_payload['updated_at']})",
         f"- CPTEC/INPE (ondas: {wave_payload['updated_at']})",
         "- Tide-Forecast.com",
