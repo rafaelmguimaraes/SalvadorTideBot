@@ -362,12 +362,15 @@ def parse_tide_events(table_selector, reference_date):
 
         tide_kind = clean_text(" ".join(cells[0].css("::text").getall()))
         raw_time = clean_text(" ".join(cells[1].css("b::text").getall()))
-        raw_height = clean_text(" ".join(cells[2].css("b::text").getall()))
+        raw_height = clean_text(" ".join(cells[2].css("::text").getall()))
         if not tide_kind or not raw_time or not raw_height:
             continue
 
         clock_time = parse_clock(raw_time)
-        height_m = float(clean_text(raw_height).replace(" m", ""))
+        height_match = re.search(r"\d+(?:\.\d+)?", raw_height)
+        if height_match is None:
+            continue
+        height_m = float(height_match.group())
         events.append(
             {
                 "kind": tide_kind,
