@@ -1,4 +1,4 @@
-"""Send a daily Salvador weather, sea and tide briefing to Telegram."""
+"""Send a daily Salvador weather, sea, tide and celestial briefing to Telegram."""
 
 from datetime import date, datetime, timezone
 from enum import IntEnum
@@ -14,6 +14,9 @@ from zoneinfo import ZoneInfo
 
 CPTEC_CITY_ID = 242
 SALVADOR_TIMEZONE = ZoneInfo("America/Bahia")
+SALVADOR_LATITUDE = -12.9718
+SALVADOR_LONGITUDE = -38.5011
+SALVADOR_UTC_OFFSET = "-03:00"
 CPTEC_WEATHER_URL = (
     f"https://servicos.cptec.inpe.br/XML/cidade/7dias/{CPTEC_CITY_ID}/previsao.xml"
 )
@@ -26,6 +29,7 @@ CPTEC_WAVES_ALL_URL = (
 TIDE_FORECAST_URL = (
     "https://www.tide-forecast.com/locations/Salvador-Brazil/tides/latest"
 )
+MET_MOON_API_URL = "https://api.met.no/weatherapi/sunrise/3.0/moon"
 TIMEOUT = 20
 LOG_DIR = "logs"
 REQUEST_HEADERS = {
@@ -208,6 +212,12 @@ def parse_clock(raw_value):
     return datetime.strptime(normalized, "%I:%M %p").time()
 
 
+def parse_iso_datetime(raw_value):
+    if not raw_value:
+        return None
+    return datetime.fromisoformat(raw_value)
+
+
 def fetch_xml_root(session, url, source_name):
     try:
         response = session.get(url, timeout=TIMEOUT)
@@ -231,6 +241,28 @@ def describe_weather(code):
         normalized_code,
         f"Codigo {normalized_code.upper()}",
     )
+
+
+def describe_moon_phase(phase_degrees):
+    if phase_degrees is None:
+        return None
+    if phase_degrees == 0:
+        return "Lua nova"
+    if phase_degrees < 90:
+        return "Crescente"
+    if phase_degrees == 90:
+        return "Quarto crescente"
+    if phase_degrees < 180:
+        return "Gibosa crescente"
+    if phase_degrees == 180:
+        return "Lua cheia"
+    if phase_degrees < 270:
+        return "Gibosa minguante"
+    if phase_degrees == 270:
+        return "Quarto minguante"
+    if phase_degrees < 360:
+        return "Minguante"
+    return "Lua nova"
 
 
 def fetch_weather(session):
@@ -272,6 +304,39 @@ def fetch_weather(session):
         "updated_at": updated_at,
         "today": today_forecast,
         "tomorrow": forecasts[1] if len(forecasts) > 1 else None,
+    }
+
+
+def fetch_moon_data(session, target_date):
+    params = {
+        "lat": SALVADOR_LATITUDE,
+        "lon": SALVADOR_LONGITUDE,
+        "date": target_date.isoformat(),
+        "offset": SALVADOR_UTC_OFFSET,
+    }
+
+    try:
+        response = session.get(MET_MOON_API_URL, params=params, timeout=TIMEOUT)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise FetchDataException(f"Error fetching MET Norway moon data: {exc}") from exc
+
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise FetchDataException(
+            f"Invalid JSON returned by MET Norway moon API: {exc}"
+        ) from exc
+
+    properties = payload.get("properties") or {}
+    phase_value = properties.get("moonphase")
+    if isinstance(phase_value, dict):
+        phase_value = phase_value.get("value")
+
+    return {
+        "phase": describe_moon_phase(phase_value),
+        "moonrise": parse_iso_datetime((properties.get("moonrise") or {}).get("time")),
+        "moonset": parse_iso_datetime((properties.get("moonset") or {}).get("time")),
     }
 
 
@@ -440,7 +505,6 @@ def build_weather_lines(weather_payload):
         "CLIMA",
         f"- Condicao: {today_forecast['description']}",
         f"- Temperatura: {today_forecast['minimum']}C a {today_forecast['maximum']}C",
-        f"- UV: {today_forecast['uv_index']}",
     ]
 
     tomorrow_forecast = weather_payload.get("tomorrow")
@@ -478,31 +542,46 @@ def build_wave_lines(wave_payload):
 
 def build_tide_lines(tide_payload):
     lines = ["MARE"]
-    if tide_payload["upcoming_event"]:
-        next_event = tide_payload["upcoming_event"]
-        lines.append(
-            f"- Proxima {next_event['label'].lower()}: "
-            f"{format_time_br(next_event['datetime'])} ({format_meters(next_event['height_m'], decimals=2)})"
-        )
-
     for event in tide_payload["events"]:
         lines.append(
             f"- {event['label']}: {format_time_br(event['datetime'])} ({format_meters(event['height_m'], decimals=2)})"
         )
 
-    if tide_payload["sunrise"] and tide_payload["sunset"]:
-        lines.append(
-            f"- Sol: {format_time_br(datetime.combine(date.today(), tide_payload['sunrise']))} / "
-            f"{format_time_br(datetime.combine(date.today(), tide_payload['sunset']))}"
-        )
+    return lines
 
-    if tide_payload["datum"]:
-        lines.append(f"- Datum: {tide_payload['datum']}")
+
+def build_celestial_lines(tide_payload, moon_payload):
+    lines = ["SOL E LUA"]
+
+    if tide_payload["sunrise"] or tide_payload["sunset"]:
+        sunrise = (
+            format_time_br(tide_payload["sunrise"])
+            if tide_payload["sunrise"]
+            else "n/d"
+        )
+        sunset = (
+            format_time_br(tide_payload["sunset"]) if tide_payload["sunset"] else "n/d"
+        )
+        lines.append(f"- Sol: nascer {sunrise} / por {sunset}")
+
+    if moon_payload["phase"] or moon_payload["moonrise"] or moon_payload["moonset"]:
+        moon_phase = moon_payload["phase"] or "n/d"
+        moonrise = (
+            format_time_br(moon_payload["moonrise"])
+            if moon_payload["moonrise"]
+            else "n/d"
+        )
+        moonset = (
+            format_time_br(moon_payload["moonset"])
+            if moon_payload["moonset"]
+            else "n/d"
+        )
+        lines.append(f"- Lua: fase {moon_phase} / nascer {moonrise} / por {moonset}")
 
     return lines
 
 
-def build_telegram_message(weather_payload, wave_payload, tide_payload):
+def build_telegram_message(weather_payload, wave_payload, tide_payload, moon_payload):
     today = datetime.now(SALVADOR_TIMEZONE).date()
     lines = [
         f"Bom dia! Boletim de Salvador - {format_date_br(today)}",
@@ -513,10 +592,7 @@ def build_telegram_message(weather_payload, wave_payload, tide_payload):
         "",
         *build_tide_lines(tide_payload),
         "",
-        "FONTES",
-        f"- CPTEC/INPE (atualizacao do clima: {weather_payload['updated_at']})",
-        f"- CPTEC/INPE (ondas: {wave_payload['updated_at']})",
-        "- Tide-Forecast.com",
+        *build_celestial_lines(tide_payload, moon_payload),
     ]
     return "\n".join(lines)
 
@@ -555,7 +631,20 @@ def main():
         weather_payload = fetch_weather(session)
         wave_payload = fetch_waves(session)
         tide_payload = fetch_tides(session)
-        message = build_telegram_message(weather_payload, wave_payload, tide_payload)
+        try:
+            moon_payload = fetch_moon_data(
+                session, datetime.now(SALVADOR_TIMEZONE).date()
+            )
+        except (FetchDataException, DataNotFoundException) as exc:
+            logger.warning("Moon data unavailable: %s", exc)
+            moon_payload = {"phase": None, "moonrise": None, "moonset": None}
+
+        message = build_telegram_message(
+            weather_payload,
+            wave_payload,
+            tide_payload,
+            moon_payload,
+        )
 
         logger.info(
             "Prepared daily briefing for %s/%s.",

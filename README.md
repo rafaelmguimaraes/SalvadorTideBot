@@ -1,6 +1,6 @@
 # SalvadorTideBot
 
-Python bot that sends a daily Telegram briefing for Salvador, BA with weather, sea conditions, wind and tide data.
+Python bot that sends a daily Telegram briefing for Salvador, BA with weather, sea conditions, wind, tide and moon data.
 
 ## What It Sends
 
@@ -12,7 +12,6 @@ Bom dia! Boletim de Salvador - 14/04/2026
 CLIMA
 - Condicao: Chuva
 - Temperatura: 24C a 29C
-- UV: 0.0
 - Amanha: Chuva, 24C a 29C
 
 MAR E VENTO
@@ -22,18 +21,14 @@ MAR E VENTO
 - Noite: 18:00, Fraco, ondas 1,5 m de ESE, vento SE 13,2 nos (24,5 km/h)
 
 MARE
-- Proxima alta: 13:53 (2,27 m)
 - Alta: 01:32 (2,06 m)
 - Baixa: 07:32 (0,41 m)
 - Alta: 13:53 (2,27 m)
 - Baixa: 20:00 (0,35 m)
-- Sol: 05:39 / 17:28
-- Datum: Mean Lower Low Water
 
-FONTES
-- CPTEC/INPE (atualizacao do clima: 2026-04-14)
-- CPTEC/INPE (ondas: 14-04-2026)
-- Tide-Forecast.com
+SOL E LUA
+- Sol: nascer 05:39 / por 17:28
+- Lua: fase Minguante / nascer 03:42 / por 16:01
 ```
 
 ## Features
@@ -41,6 +36,7 @@ FONTES
 - Fetches daily weather forecast for Salvador from CPTEC/INPE
 - Fetches same-day sea and wind forecast from CPTEC/INPE wave endpoints
 - Scrapes Salvador tide times from Tide-Forecast.com
+- Fetches moon phase, moonrise and moonset from MET Norway
 - Sends one daily message to the Telegram chat configured in GitHub secrets
 - Writes runtime logs to `logs/YYYY-MM-DD.log`
 
