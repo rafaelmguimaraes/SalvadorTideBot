@@ -500,6 +500,9 @@ def fetch_tides(session):
 
 
 def build_weather_lines(weather_payload):
+    if weather_payload is None:
+        return ["CLIMA", "- Indisponivel no momento"]
+
     today_forecast = weather_payload["today"]
     lines = [
         "CLIMA",
@@ -519,6 +522,9 @@ def build_weather_lines(weather_payload):
 
 
 def build_wave_lines(wave_payload):
+    if wave_payload is None:
+        return ["MAR E VENTO", "- Indisponivel no momento"]
+
     heights = [period["height"] for period in wave_payload["periods"]]
     wind_speeds = [period["wind_speed"] for period in wave_payload["periods"]]
     lines = [
@@ -628,8 +634,18 @@ def main():
     try:
         telegram_token, telegram_chat_id = load_tokens()
         session = build_http_session()
-        weather_payload = fetch_weather(session)
-        wave_payload = fetch_waves(session)
+        try:
+            weather_payload = fetch_weather(session)
+        except (FetchDataException, DataNotFoundException) as exc:
+            logger.warning("Weather data unavailable: %s", exc)
+            weather_payload = None
+
+        try:
+            wave_payload = fetch_waves(session)
+        except (FetchDataException, DataNotFoundException) as exc:
+            logger.warning("Wave data unavailable: %s", exc)
+            wave_payload = None
+
         tide_payload = fetch_tides(session)
         try:
             moon_payload = fetch_moon_data(
@@ -648,8 +664,8 @@ def main():
 
         logger.info(
             "Prepared daily briefing for %s/%s.",
-            weather_payload["city_name"],
-            weather_payload["state"],
+            weather_payload["city_name"] if weather_payload else "Salvador",
+            weather_payload["state"] if weather_payload else "BA",
         )
         notify_by_telegram(telegram_token, telegram_chat_id, message)
         logger.info("Daily briefing sent successfully.")

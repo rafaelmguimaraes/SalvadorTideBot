@@ -145,5 +145,5 @@ If the workflow fails, the generated files under `logs/` are uploaded as artifac
 
 ## Notes
 
-- CPTEC responses are XML and can occasionally be unstable; the script fails with a non-zero exit code when upstream data cannot be fetched.
+- CPTEC responses are XML and can occasionally be unstable; when weather or wave data is unavailable, the bot sends the briefing with those sections marked as temporarily unavailable.
 - Tide data currently comes from a public web page scrape because I could not validate a stable free Brazilian tide API without authentication.
